@@ -7,11 +7,12 @@
 
 const char kWindowTitle[] = "LE2C_25_マルヤマ_ユウキ_MT3_02_00";
 
+const int kWindowWidth = 1280;
+const int kWindowHeight = 720;
+
 Expantion4x4* expantion4x4_ = new Expantion4x4();
 ExpantionVector3* expantionVector3_ = new ExpantionVector3();
 
-const int kWindowWidth = 1280;
-const int kWindowHeight = 720;
 struct Sphere {
 	Vector3 center;
 	float radius;
@@ -159,6 +160,19 @@ Vector3 ClosestPoint(const Vector3& point, const Segment& segment) {
 	return Vector3{ closestX, closestY, closestZ };
 }
 
+bool IsCollision(const Sphere& s1, const Sphere& s2) {
+	// 2つの球の中心間の距離を計算
+	float distanceSquared = (s1.center.x - s2.center.x) * (s1.center.x - s2.center.x) +
+		(s1.center.y - s2.center.y) * (s1.center.y - s2.center.y) +
+		(s1.center.z - s2.center.z) * (s1.center.z - s2.center.z);
+
+	// 2つの球の半径の合計を計算
+	float radiusSum = s1.radius + s2.radius;
+
+	// 中心間の距離が半径の合計より小さい場合は衝突している
+	return distanceSquared <= (radiusSum * radiusSum);
+}
+
 // Windowsアプリでのエントリーポイント(main関数)
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
@@ -169,14 +183,20 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	char keys[256] = {0};
 	char preKeys[256] = {0};
 
-	Segment segment{ {-2.0f,-1.0f,0.0f},{3.0f,2.0f,2.0f} };
-	Vector3 point{ -1.5f,0.6f,0.6f };
-
 	Vector3 cameraTranslate{ 0.0f,1.9f,-6.49f };
 	Vector3 cameraRotate{ 0.26f,0.0f,0.0f };
-	Sphere sphere{
+	Sphere sphere1{
 		{0.0f,0.0f,0.0f},0.5f
 	};
+	Sphere sphere2{
+		{1.0f,0.0f,1.0f},0.3f
+	};
+	Sphere sphere[2]{
+		{{0.0f,0.0f,0.0f},0.5f},
+		{{1.0f,0.0f,1.0f},0.3f}
+	};
+
+	uint32_t s1Color = WHITE;
 
 	// ウィンドウの×ボタンが押されるまでループ
 	while (Novice::ProcessMessage() == 0) {
@@ -198,20 +218,19 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		Matrix4x4 worldViewProjectionMatrix = expantion4x4_->Multiply(worldMatrix, expantion4x4_->Multiply(viewMatrix, projectionMatrix));
 		Matrix4x4 viewPortMatrix = expantion4x4_->MakeViewportMatrix(0, 0, float(kWindowWidth), float(kWindowHeight), 0.0f, 1.0f);
 
-		Vector3 project = Project(expantionVector3_->Subtract(point, segment.origin), segment.diff);
-		Vector3 closestPoint = ClosestPoint(point, segment);
+		if(IsCollision(sphere[0], sphere[1])) {
+			s1Color=RED;
+		}
+		else {
+			s1Color=WHITE;
+		}
 
-		Sphere pointSphere{ point,0.01f };
-		Sphere closestPointSphere{ closestPoint,0.01f };
-
-		Vector3 start = expantion4x4_->Transform(expantion4x4_->Transform(segment.origin, worldViewProjectionMatrix), viewPortMatrix);
-		Vector3 end = expantion4x4_->Transform(expantion4x4_->Transform(expantionVector3_->Add(segment.origin, segment.diff), worldViewProjectionMatrix), viewPortMatrix);
 
 		ImGui::Begin("Window");
-		ImGui::InputFloat3("Point", &point.x, "%.3f", ImGuiInputTextFlags_ReadOnly);
-		ImGui::InputFloat3("Segment origin", &segment.origin.x, "%.3f", ImGuiInputTextFlags_ReadOnly);
-		ImGui::InputFloat3("Segment diff", &segment.diff.x, "%.3f", ImGuiInputTextFlags_ReadOnly);
-		ImGui::InputFloat3("Project", &project.x, "%.3f", ImGuiInputTextFlags_ReadOnly);
+		ImGui::DragFloat3("SphereCenter[0]", &sphere[0].center.x, 0.01f);
+		ImGui::DragFloat("ShpereRadius[0]", &sphere[0].radius, 0.01f);
+		ImGui::DragFloat3("SphereCenter[1]", &sphere[1].center.x, 0.01f);
+		ImGui::DragFloat("ShpereRadius[1]", &sphere[1].radius, 0.01f);
 		ImGui::End();
 
 		///
@@ -223,12 +242,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		///
 		
 		DrawGrid(worldViewProjectionMatrix, viewPortMatrix);
-
-		Novice::DrawLine(int(start.x), int(start.y), int(end.x), int(end.y), WHITE);
-
-		DrawSphere(pointSphere, worldViewProjectionMatrix, viewPortMatrix, RED);
-		DrawSphere(closestPointSphere, worldViewProjectionMatrix, viewPortMatrix, BLACK);
-
+		DrawSphere(sphere[0], worldViewProjectionMatrix, viewPortMatrix, s1Color);
+		DrawSphere(sphere[1], worldViewProjectionMatrix, viewPortMatrix, WHITE);
 		///
 		/// ↑描画処理ここまで
 		///
