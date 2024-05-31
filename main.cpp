@@ -201,16 +201,23 @@ void DrawPlane(const Plane& plane, const Matrix4x4& viewProjectionMatrix, const 
 	Novice::DrawLine(int(points[3].x), int(points[3].y), int(points[0].x), int(points[0].y), color);
 }
 
-bool IsCollision(const Sphere& sphere, const Plane& plane) {
-	// 平面の法線を正規化
-	float normLength = std::sqrt(plane.normal.x * plane.normal.x + plane.normal.y * plane.normal.y + plane.normal.z * plane.normal.z);
-	Vector3 normalizedNormal = { plane.normal.x / normLength, plane.normal.y / normLength, plane.normal.z / normLength };
+bool IsCollision(const Segment& segment, const Plane& plane) {
+	// 平面の法線ベクトルと平面までの距離を取得
+	Vector3 normal = plane.normal;
+	float distance = plane.distance;
 
-	// 球の中心から平面までの距離を計算
-	float distance = std::fabs(normalizedNormal.x * sphere.center.x + normalizedNormal.y * sphere.center.y + normalizedNormal.z * sphere.center.z - plane.distance);
+	// 線分の始点と終点の位置を計算
+	float startDistance = normal.x * segment.origin.x + normal.y * segment.origin.y + normal.z * segment.origin.z - distance;
+	float endDistance = normal.x * (segment.origin.x + segment.diff.x) + normal.y * (segment.origin.y + segment.diff.y) + normal.z * (segment.origin.z + segment.diff.z) - distance;
 
-	// 球の中心から平面までの距離が球の半径以下かどうかを判定
-	return distance <= sphere.radius;
+	// 線分が平面の両側にあるかどうかを判定
+	if ((startDistance * endDistance) <= 0.0f) {
+		// 両側にある場合は交差が発生するため、衝突と判定
+		return true;
+	}
+
+	// 両側にない場合は衝突しない
+	return false;
 }
 
 // Windowsアプリでのエントリーポイント(main関数)
@@ -225,15 +232,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	Vector3 cameraTranslate{ 0.0f,1.9f,-6.49f };
 	Vector3 cameraRotate{ 0.26f,0.0f,0.0f };
-	Sphere sphere{
-		{0.0f,0.0f,0.0f},0.5f
-	};
+
 	Plane plane{
 		{0.0f,1.0f,0.01f},1.0f
 	};
+	Segment segment{
+		{-0.45f,0.41f,0.5f},
+		{1.0f,0.5f,0.0f}
+	};
 
 
-	uint32_t s1Color = WHITE;
+	uint32_t color = WHITE;
 
 	// ウィンドウの×ボタンが押されるまでループ
 	while (Novice::ProcessMessage() == 0) {
@@ -255,20 +264,21 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		Matrix4x4 worldViewProjectionMatrix = expantion4x4_->Multiply(worldMatrix, expantion4x4_->Multiply(viewMatrix, projectionMatrix));
 		Matrix4x4 viewPortMatrix = expantion4x4_->MakeViewportMatrix(0, 0, float(kWindowWidth), float(kWindowHeight), 0.0f, 1.0f);
 
-		if (IsCollision(sphere, plane)) {
-			s1Color=RED;
+		if (IsCollision(segment, plane)) {
+			color=RED;
 		}
 		else {
-			s1Color=WHITE;
+			color=WHITE;
 		}
 
+		Vector3 screenStart = expantion4x4_->Transform(expantion4x4_->Transform(segment.origin, worldViewProjectionMatrix), viewPortMatrix);
+		Vector3 screenEnd = expantion4x4_->Transform(expantion4x4_->Transform(expantionVector3_->Add(segment.origin, segment.diff), worldViewProjectionMatrix), viewPortMatrix);
 
 		ImGui::Begin("Window");
-		ImGui::DragFloat3("SphereCenter", &sphere.center.x, 0.01f);
-		ImGui::DragFloat("ShpereRadius", &sphere.radius, 0.01f);
-
 		ImGui::DragFloat3("Plane.Normal", &plane.normal.x, 0.01f);
 		ImGui::DragFloat("Plane.Distance", &plane.distance, 0.01f);
+		ImGui::DragFloat3("Segment.Origin", &segment.origin.x, 0.01f);
+		ImGui::DragFloat3("Segment.Diff", &segment.diff.x, 0.01f);
 		ImGui::End();
 
 		plane.normal = expantionVector3_->Normalize(plane.normal);
@@ -281,8 +291,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		///
 		
 		DrawGrid(worldViewProjectionMatrix, viewPortMatrix);
-		DrawSphere(sphere, worldViewProjectionMatrix, viewPortMatrix, s1Color);
+
 		DrawPlane(plane, worldViewProjectionMatrix, viewPortMatrix, WHITE);
+		Novice::DrawLine(int(screenStart.x), int(screenStart.y), int(screenEnd.x), int(screenEnd.y), color);
+
+		if (IsCollision(segment, plane)) {
+		    Novice::ScreenPrintf(1, 1, "true");
+		}
+
 		///
 		/// ↑描画処理ここまで
 		///
