@@ -13,6 +13,7 @@ const int kWindowHeight = 720;
 Expantion4x4* expantion4x4_ = new Expantion4x4();
 ExpantionVector3* expantionVector3_ = new ExpantionVector3();
 
+
 struct Sphere {
 	Vector3 center;
 	float radius;
@@ -35,6 +36,10 @@ struct Ray {
 struct Segment {
 	Vector3 origin;
 	Vector3 diff;
+};
+
+struct Triangle {
+	Vector3 vertices[3];
 };
 
 void DrawGrid(const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix) {
@@ -201,23 +206,52 @@ void DrawPlane(const Plane& plane, const Matrix4x4& viewProjectionMatrix, const 
 	Novice::DrawLine(int(points[3].x), int(points[3].y), int(points[0].x), int(points[0].y), color);
 }
 
-bool IsCollision(const Segment& segment, const Plane& plane) {
-	// 平面の法線ベクトルと平面までの距離を取得
-	Vector3 normal = plane.normal;
-	float distance = plane.distance;
-
-	// 線分の始点と終点の位置を計算
-	float startDistance = normal.x * segment.origin.x + normal.y * segment.origin.y + normal.z * segment.origin.z - distance;
-	float endDistance = normal.x * (segment.origin.x + segment.diff.x) + normal.y * (segment.origin.y + segment.diff.y) + normal.z * (segment.origin.z + segment.diff.z) - distance;
-
-	// 線分が平面の両側にあるかどうかを判定
-	if ((startDistance * endDistance) <= 0.0f) {
-		// 両側にある場合は交差が発生するため、衝突と判定
-		return true;
+void DrawTriangle(const Triangle& triangle, const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix, uint32_t color) {
+	Vector3 points[3];
+	for (uint32_t index = 0; index < 3; ++index) {
+		points[index] = expantion4x4_->Transform(expantion4x4_->Transform(triangle.vertices[index], viewProjectionMatrix), viewportMatrix);
 	}
 
-	// 両側にない場合は衝突しない
-	return false;
+	Novice::DrawTriangle(int(points[0].x), int(points[0].y), int(points[1].x), int(points[1].y), int(points[2].x), int(points[2].y), color, kFillModeWireFrame);
+}
+
+bool IsCollision(const Triangle& triangle, const Segment& segment) {
+	// 三角形の平面の法線を計算
+	Vector3 edge1 = expantionVector3_->Subtract(triangle.vertices[1], triangle.vertices[0]);
+	Vector3 edge2 = expantionVector3_->Subtract(triangle.vertices[2], triangle.vertices[0]);
+	Vector3 normal = Cross(edge1, edge2);
+
+	// 平面方程式の距離項を計算
+	float d = expantionVector3_->Dot(normal, triangle.vertices[0]);
+
+	// 線分の始点と終点の位置を計算
+	float startDist = expantionVector3_->Dot(normal, segment.origin) - d;
+	float endDist = expantionVector3_->Dot(normal, { segment.origin.x + segment.diff.x, segment.origin.y + segment.diff.y, segment.origin.z + segment.diff.z }) - d;
+
+	// 線分が平面の両側にあるかどうかを判定
+	if ((startDist * endDist) > 0.0f) {
+		return false; // 両側にない場合は衝突しない
+	}
+
+	// 平面との交点を計算
+	float t = startDist / (startDist - endDist);
+	Vector3 intersection = {
+		segment.origin.x + t * segment.diff.x,
+		segment.origin.y + t * segment.diff.y,
+		segment.origin.z + t * segment.diff.z
+	};
+
+	// 三角形の内部にあるかを確認
+	for (int i = 0; i < 3; ++i) {
+		Vector3 edge = expantionVector3_->Subtract(triangle.vertices[(i + 1) % 3], triangle.vertices[i]);
+		Vector3 toPoint = expantionVector3_->Subtract(intersection, triangle.vertices[i]);
+		Vector3 cross = Cross(edge, toPoint);
+		if (expantionVector3_->Dot(normal, cross) < 0.0f) {
+			return false;
+		}
+	}
+
+	return true;
 }
 
 // Windowsアプリでのエントリーポイント(main関数)
@@ -233,16 +267,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	Vector3 cameraTranslate{ 0.0f,1.9f,-6.49f };
 	Vector3 cameraRotate{ 0.26f,0.0f,0.0f };
 
-	Plane plane{
-		{0.0f,1.0f,0.01f},1.0f
-	};
 	Segment segment{
-		{-0.45f,0.41f,0.5f},
-		{1.0f,0.5f,0.0f}
+		{0.0f,0.5f,-1.0f},
+		{0.0f,0.5f,2.0f}
+	};
+	Triangle triangle{
+		{{-1.0f,0.0f,0.0f},{0.0f,1.0f,0.0f},{1.0f,0.0f,0.0f}}
 	};
 
 
 	uint32_t color = WHITE;
+	uint32_t tColor = WHITE;
 
 	// ウィンドウの×ボタンが押されるまでループ
 	while (Novice::ProcessMessage() == 0) {
@@ -264,7 +299,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		Matrix4x4 worldViewProjectionMatrix = expantion4x4_->Multiply(worldMatrix, expantion4x4_->Multiply(viewMatrix, projectionMatrix));
 		Matrix4x4 viewPortMatrix = expantion4x4_->MakeViewportMatrix(0, 0, float(kWindowWidth), float(kWindowHeight), 0.0f, 1.0f);
 
-		if (IsCollision(segment, plane)) {
+		if (IsCollision(triangle,segment)) {
 			color=RED;
 		}
 		else {
@@ -275,13 +310,15 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		Vector3 screenEnd = expantion4x4_->Transform(expantion4x4_->Transform(expantionVector3_->Add(segment.origin, segment.diff), worldViewProjectionMatrix), viewPortMatrix);
 
 		ImGui::Begin("Window");
-		ImGui::DragFloat3("Plane.Normal", &plane.normal.x, 0.01f);
-		ImGui::DragFloat("Plane.Distance", &plane.distance, 0.01f);
+		ImGui::DragFloat3("Triangle.v0", &triangle.vertices[0].x, 0.01f);
+		ImGui::DragFloat3("Triangle.v1", &triangle.vertices[1].x, 0.01f);
+		ImGui::DragFloat3("Triangle.v2", &triangle.vertices[2].x, 0.01f);
 		ImGui::DragFloat3("Segment.Origin", &segment.origin.x, 0.01f);
 		ImGui::DragFloat3("Segment.Diff", &segment.diff.x, 0.01f);
 		ImGui::End();
 
-		plane.normal = expantionVector3_->Normalize(plane.normal);
+
+
 		///
 		/// ↑更新処理ここまで
 		///
@@ -292,12 +329,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		
 		DrawGrid(worldViewProjectionMatrix, viewPortMatrix);
 
-		DrawPlane(plane, worldViewProjectionMatrix, viewPortMatrix, WHITE);
+		DrawTriangle(triangle, worldViewProjectionMatrix, viewPortMatrix, tColor);
 		Novice::DrawLine(int(screenStart.x), int(screenStart.y), int(screenEnd.x), int(screenEnd.y), color);
-
-		if (IsCollision(segment, plane)) {
-		    Novice::ScreenPrintf(1, 1, "true");
-		}
 
 		///
 		/// ↑描画処理ここまで
