@@ -4,6 +4,8 @@
 #include "Matrix4x4.h"
 #include "Expantion4x4.h"
 #include "ExpantionVector3.h"
+#include <array>
+#include <cstdint>
 
 const char kWindowTitle[] = "LE2C_25_マルヤマ_ユウキ_MT3_02_00";
 
@@ -40,6 +42,11 @@ struct Segment {
 
 struct Triangle {
 	Vector3 vertices[3];
+};
+
+struct AABB {
+	Vector3 min; //!< 最小点
+	Vector3 max; //!< 最大点
 };
 
 void DrawGrid(const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix) {
@@ -215,43 +222,45 @@ void DrawTriangle(const Triangle& triangle, const Matrix4x4& viewProjectionMatri
 	Novice::DrawTriangle(int(points[0].x), int(points[0].y), int(points[1].x), int(points[1].y), int(points[2].x), int(points[2].y), color, kFillModeWireFrame);
 }
 
-bool IsCollision(const Triangle& triangle, const Segment& segment) {
-	// 三角形の平面の法線を計算
-	Vector3 edge1 = expantionVector3_->Subtract(triangle.vertices[1], triangle.vertices[0]);
-	Vector3 edge2 = expantionVector3_->Subtract(triangle.vertices[2], triangle.vertices[0]);
-	Vector3 normal = Cross(edge1, edge2);
+void DrawLine(const Segment& segment, const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix, uint32_t color) {
+	Vector3 screenStart = expantion4x4_->Transform(expantion4x4_->Transform(segment.origin, viewProjectionMatrix), viewportMatrix);
+	Vector3 screenEnd = expantion4x4_->Transform(expantion4x4_->Transform(expantionVector3_->Add(segment.origin, segment.diff), viewProjectionMatrix), viewportMatrix);
 
-	// 平面方程式の距離項を計算
-	float d = expantionVector3_->Dot(normal, triangle.vertices[0]);
+	Novice::DrawLine(int(screenStart.x), int(screenStart.y), int(screenEnd.x), int(screenEnd.y), color);
+}
 
-	// 線分の始点と終点の位置を計算
-	float startDist = expantionVector3_->Dot(normal, segment.origin) - d;
-	float endDist = expantionVector3_->Dot(normal, { segment.origin.x + segment.diff.x, segment.origin.y + segment.diff.y, segment.origin.z + segment.diff.z }) - d;
 
-	// 線分が平面の両側にあるかどうかを判定
-	if ((startDist * endDist) > 0.0f) {
-		return false; // 両側にない場合は衝突しない
-	}
+void DrawAABB(const AABB& aabb, const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix, uint32_t color) {
+	// AABBの8つの頂点を計算
+	Vector3 v0 = aabb.min;
+	Vector3 v1 = { aabb.max.x, aabb.min.y, aabb.min.z };
+	Vector3 v2 = { aabb.min.x, aabb.max.y, aabb.min.z };
+	Vector3 v3 = { aabb.max.x, aabb.max.y, aabb.min.z };
+	Vector3 v4 = { aabb.min.x, aabb.min.y, aabb.max.z };
+	Vector3 v5 = { aabb.max.x, aabb.min.y, aabb.max.z };
+	Vector3 v6 = { aabb.min.x, aabb.max.y, aabb.max.z };
+	Vector3 v7 = aabb.max;
 
-	// 平面との交点を計算
-	float t = startDist / (startDist - endDist);
-	Vector3 intersection = {
-		segment.origin.x + t * segment.diff.x,
-		segment.origin.y + t * segment.diff.y,
-		segment.origin.z + t * segment.diff.z
+	// エッジを定義
+	std::array<Segment, 12> edges = {
+		Segment{v0, v1 - v0}, Segment{v1, v3 - v1}, Segment{v3, v2 - v3}, Segment{v2, v0 - v2},
+		Segment{v4, v5 - v4}, Segment{v5, v7 - v5}, Segment{v7, v6 - v7}, Segment{v6, v4 - v6},
+		Segment{v0, v4 - v0}, Segment{v1, v5 - v1}, Segment{v2, v6 - v2}, Segment{v3, v7 - v3}
 	};
 
-	// 三角形の内部にあるかを確認
-	for (int i = 0; i < 3; ++i) {
-		Vector3 edge = expantionVector3_->Subtract(triangle.vertices[(i + 1) % 3], triangle.vertices[i]);
-		Vector3 toPoint = expantionVector3_->Subtract(intersection, triangle.vertices[i]);
-		Vector3 cross = Cross(edge, toPoint);
-		if (expantionVector3_->Dot(normal, cross) < 0.0f) {
-			return false;
-		}
+	// 各エッジを描画
+	for (const auto& edge : edges) {
+		DrawLine(edge, viewProjectionMatrix, viewportMatrix, color);
 	}
+}
 
-	return true;
+bool IsCollision(const AABB& aabb1, const AABB& aabb2) {
+	if ((aabb1.min.x <= aabb2.max.x && aabb1.max.x >= aabb2.min.x) &&
+		(aabb1.min.y <= aabb2.max.y && aabb1.max.y >= aabb2.min.y) &&
+		(aabb1.min.z <= aabb2.max.z && aabb1.max.z >= aabb2.min.z)) {
+		return true;
+	}
+	return false;
 }
 
 // Windowsアプリでのエントリーポイント(main関数)
@@ -275,9 +284,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		{{-1.0f,0.0f,0.0f},{0.0f,1.0f,0.0f},{1.0f,0.0f,0.0f}}
 	};
 
+	AABB aabb1{
+		.min{-0.5f,-0.5f,-0.5f},
+		.max{0.0f,0.0f,0.0f},
+	};
+	AABB aabb2{
+		.min{0.2f,0.2f,0.2f},
+		.max{1.0f,1.0f,1.0f},
+	};
 
-	uint32_t color = WHITE;
-	uint32_t tColor = WHITE;
+	uint32_t color1 = WHITE;
+	uint32_t color2 = WHITE;
 
 	// ウィンドウの×ボタンが押されるまでループ
 	while (Novice::ProcessMessage() == 0) {
@@ -299,25 +316,33 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		Matrix4x4 worldViewProjectionMatrix = expantion4x4_->Multiply(worldMatrix, expantion4x4_->Multiply(viewMatrix, projectionMatrix));
 		Matrix4x4 viewPortMatrix = expantion4x4_->MakeViewportMatrix(0, 0, float(kWindowWidth), float(kWindowHeight), 0.0f, 1.0f);
 
-		if (IsCollision(triangle,segment)) {
-			color=RED;
+		if (IsCollision(aabb1,aabb2)) {
+			color1=RED;
 		}
 		else {
-			color=WHITE;
+			color1=WHITE;
 		}
 
-		Vector3 screenStart = expantion4x4_->Transform(expantion4x4_->Transform(segment.origin, worldViewProjectionMatrix), viewPortMatrix);
-		Vector3 screenEnd = expantion4x4_->Transform(expantion4x4_->Transform(expantionVector3_->Add(segment.origin, segment.diff), worldViewProjectionMatrix), viewPortMatrix);
-
 		ImGui::Begin("Window");
-		ImGui::DragFloat3("Triangle.v0", &triangle.vertices[0].x, 0.01f);
-		ImGui::DragFloat3("Triangle.v1", &triangle.vertices[1].x, 0.01f);
-		ImGui::DragFloat3("Triangle.v2", &triangle.vertices[2].x, 0.01f);
-		ImGui::DragFloat3("Segment.Origin", &segment.origin.x, 0.01f);
-		ImGui::DragFloat3("Segment.Diff", &segment.diff.x, 0.01f);
+		ImGui::DragFloat3("aabb1.min", &aabb1.min.x, 0.01f);
+		ImGui::DragFloat3("aabb1.max", &aabb1.max.x, 0.01f);
+		ImGui::DragFloat3("aabb2.min", &aabb2.min.x, 0.01f);
+		ImGui::DragFloat3("aabb2.max", &aabb2.max.x, 0.01f);
 		ImGui::End();
 
+		aabb1.min.x = (std::min)(aabb1.min.x, aabb1.max.x);
+		aabb1.max.x = (std::max)(aabb1.min.x, aabb1.max.x);
+		aabb1.min.y = (std::min)(aabb1.min.y, aabb1.max.y);
+		aabb1.max.y = (std::max)(aabb1.min.y, aabb1.max.y);
+		aabb1.min.z = (std::min)(aabb1.min.z, aabb1.max.z);
+		aabb1.max.z = (std::max)(aabb1.min.z, aabb1.max.z);
 
+		aabb2.min.x = (std::min)(aabb2.min.x, aabb2.max.x);
+		aabb2.max.x = (std::max)(aabb2.min.x, aabb2.max.x);
+		aabb2.min.y = (std::min)(aabb2.min.y, aabb2.max.y);
+		aabb2.max.y = (std::max)(aabb2.min.y, aabb2.max.y);
+		aabb2.min.z = (std::min)(aabb2.min.z, aabb2.max.z);
+		aabb2.max.z = (std::max)(aabb2.min.z, aabb2.max.z);
 
 		///
 		/// ↑更新処理ここまで
@@ -329,8 +354,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		
 		DrawGrid(worldViewProjectionMatrix, viewPortMatrix);
 
-		DrawTriangle(triangle, worldViewProjectionMatrix, viewPortMatrix, tColor);
-		Novice::DrawLine(int(screenStart.x), int(screenStart.y), int(screenEnd.x), int(screenEnd.y), color);
+		DrawAABB(aabb1, worldViewProjectionMatrix, viewPortMatrix, color1);
+
+		DrawAABB(aabb2, worldViewProjectionMatrix, viewPortMatrix, color2);
 
 		///
 		/// ↑描画処理ここまで
