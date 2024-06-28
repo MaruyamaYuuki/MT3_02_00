@@ -1,5 +1,7 @@
+#define NOMINMAX
 #include <Novice.h>
 #include<imgui.h>
+#include "Vector2.h"
 #include "Vector3.h"
 #include "Matrix4x4.h"
 #include "Expantion4x4.h"
@@ -15,7 +17,6 @@ const int kWindowHeight = 720;
 
 Expantion4x4* expantion4x4_ = new Expantion4x4();
 ExpantionVector3* expantionVector3_ = new ExpantionVector3();
-
 
 struct Sphere {
 	Vector3 center;
@@ -255,18 +256,34 @@ void DrawAABB(const AABB& aabb, const Matrix4x4& viewProjectionMatrix, const Mat
 	}
 }
 
-bool IsCollision(const AABB& aabb, const Sphere& sphere) {
-	// 最近接点を求める
-	Vector3 closestPoint{ std::clamp(sphere.center.x,aabb.min.x,aabb.max.x),
-	std::clamp(sphere.center.y,aabb.min.y,aabb.max.y),std::clamp(sphere.center.z,aabb.min.z,aabb.max.z) };
-	// 最近接点と球の中心との距離を求める
-	float distance = expantionVector3_->Length(closestPoint - sphere.center);
-	// 距離が半径よりも小さければ衝突
-	if (distance <= sphere.radius) {
-		return true;
-	}
-	return false;
+bool IsCollision(const AABB& aabb, const Segment& segment) {
+	// x軸方向の衝突判定
+	float txmin = (aabb.min.x - segment.origin.x) / segment.diff.x;
+	float txmax = (aabb.max.x - segment.origin.x) / segment.diff.x;
+	if (txmin > txmax) std::swap(txmin, txmax);
+
+	// y軸方向の衝突判定
+	float tymin = (aabb.min.y - segment.origin.y) / segment.diff.y;
+	float tymax = (aabb.max.y - segment.origin.y) / segment.diff.y;
+	if (tymin > tymax) std::swap(tymin, tymax);
+
+	// z軸方向の衝突判定
+	float tzmin = (aabb.min.z - segment.origin.z) / segment.diff.z;
+	float tzmax = (aabb.max.z - segment.origin.z) / segment.diff.z;
+	if (tzmin > tzmax) std::swap(tzmin, tzmax);
+
+	// 最も近い交差点と最も遠い交差点
+	float tNear = std::max({ txmin, tymin, tzmin });
+	float tFar = std::min({ txmax, tymax, tzmax });
+
+	// 衝突判定
+	if (tNear > tFar) return false; // tNearがtFarより大きい場合、交差点がない
+	if (tFar < 0) return false; // tFarが0より小さい場合、線分がAABBの外側にある
+
+	return true; // 交差している
 }
+
+
 
 // Windowsアプリでのエントリーポイント(main関数)
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
@@ -281,13 +298,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	Vector3 cameraTranslate{ 0.0f,1.9f,-6.49f };
 	Vector3 cameraRotate{ 0.26f,0.0f,0.0f };
 
-
-	Sphere sphere{
-	{0.0f,0.0f,1.0f},0.5f
-	};
 	AABB aabb{
 		.min{-0.5f,-0.5f,-0.5f},
-		.max{0.0f,0.0f,0.0f},
+		.max{0.5f,0.5f,0.5f},
+	};
+	Segment segment{
+		.origin{-0.7f,0.3f,0.0f},
+		.diff{2.0f,-0.5f,0.0f}
 	};
 
 	uint32_t color1 = WHITE;
@@ -313,7 +330,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		Matrix4x4 worldViewProjectionMatrix = expantion4x4_->Multiply(worldMatrix, expantion4x4_->Multiply(viewMatrix, projectionMatrix));
 		Matrix4x4 viewPortMatrix = expantion4x4_->MakeViewportMatrix(0, 0, float(kWindowWidth), float(kWindowHeight), 0.0f, 1.0f);
 
-		if (IsCollision(aabb, sphere)) {
+		if (IsCollision(aabb, segment)) {
 			color1=RED;
 		}
 		else {
@@ -323,16 +340,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		ImGui::Begin("Window");
 		ImGui::DragFloat3("aabb.min", &aabb.min.x, 0.01f);
 		ImGui::DragFloat3("aabb.max", &aabb.max.x, 0.01f);
-		ImGui::DragFloat3("SphereCenter", &sphere.center.x, 0.01f);
-		ImGui::DragFloat("ShpereRadius", &sphere.radius, 0.01f);
+		ImGui::DragFloat3("segment.origin", &segment.origin.x, 0.01f);
+		ImGui::DragFloat3("segment.diff", &segment.diff.x, 0.01f);
 		ImGui::End();
 
-		aabb.min.x = (std::min)(aabb.min.x, aabb.max.x);
-		aabb.max.x = (std::max)(aabb.min.x, aabb.max.x);
-		aabb.min.y = (std::min)(aabb.min.y, aabb.max.y);
-		aabb.max.y = (std::max)(aabb.min.y, aabb.max.y);
-		aabb.min.z = (std::min)(aabb.min.z, aabb.max.z);
-		aabb.max.z = (std::max)(aabb.min.z, aabb.max.z);
+
 
 		///
 		/// ↑更新処理ここまで
@@ -346,7 +358,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 		DrawAABB(aabb, worldViewProjectionMatrix, viewPortMatrix, color1);
 
-		DrawSphere(sphere, worldViewProjectionMatrix, viewPortMatrix, color2);
+		DrawLine(segment, worldViewProjectionMatrix, viewPortMatrix, color2);
 
 		///
 		/// ↑描画処理ここまで
