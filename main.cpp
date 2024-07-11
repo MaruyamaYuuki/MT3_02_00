@@ -9,6 +9,7 @@
 #include <array>
 #include <cstdint>
 #include <algorithm>
+#include <vector>
 
 const char kWindowTitle[] = "LE2C_25_マルヤマ_ユウキ_MT3_02_00";
 
@@ -21,10 +22,6 @@ ExpantionVector3* expantionVector3_ = new ExpantionVector3();
 struct Sphere {
 	Vector3 center;
 	float radius;
-};
-struct Plane {
-	Vector3 normal;
-	float distance;
 };
 
 struct Line {
@@ -40,15 +37,6 @@ struct Ray {
 struct Segment {
 	Vector3 origin;
 	Vector3 diff;
-};
-
-struct Triangle {
-	Vector3 vertices[3];
-};
-
-struct AABB {
-	Vector3 min; //!< 最小点
-	Vector3 max; //!< 最大点
 };
 
 void DrawGrid(const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix) {
@@ -194,96 +182,41 @@ Vector3 Prependicular(const Vector3& vector) {
 	return { 0.0f,-vector.z,vector.y };
 }
 
-void DrawPlane(const Plane& plane, const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix, uint32_t color) {
-	Vector3 center = expantionVector3_->Multiply(plane.distance, plane.normal);
-	Vector3 perpendiculars[4];
-	perpendiculars[0] = expantionVector3_->Normalize(Prependicular(plane.normal));
-	perpendiculars[1] = { -perpendiculars[0].x,-perpendiculars[0].y,-perpendiculars[0].z };
-	perpendiculars[2] = Cross(plane.normal, perpendiculars[0]);
-	perpendiculars[3] = { -perpendiculars[2].x,-perpendiculars[2].y,-perpendiculars[2].z };
-
-	Vector3 points[4];
-	for (uint32_t index = 0; index < 4; ++index) {
-		Vector3 extend = expantionVector3_->Multiply(2.0f, perpendiculars[index]);
-		Vector3 point = expantionVector3_->Add(center, extend);
-		points[index] = expantion4x4_->Transform(expantion4x4_->Transform(point, viewProjectionMatrix), viewportMatrix);
-	}
-
-	Novice::DrawLine(int(points[0].x), int(points[0].y), int(points[2].x), int(points[2].y), color);
-	Novice::DrawLine(int(points[1].x), int(points[1].y), int(points[2].x), int(points[2].y), color);
-	Novice::DrawLine(int(points[3].x), int(points[3].y), int(points[1].x), int(points[1].y), color);
-	Novice::DrawLine(int(points[3].x), int(points[3].y), int(points[0].x), int(points[0].y), color);
-}
-
-void DrawTriangle(const Triangle& triangle, const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix, uint32_t color) {
-	Vector3 points[3];
-	for (uint32_t index = 0; index < 3; ++index) {
-		points[index] = expantion4x4_->Transform(expantion4x4_->Transform(triangle.vertices[index], viewProjectionMatrix), viewportMatrix);
-	}
-
-	Novice::DrawTriangle(int(points[0].x), int(points[0].y), int(points[1].x), int(points[1].y), int(points[2].x), int(points[2].y), color, kFillModeWireFrame);
-}
-
-void DrawLine(const Segment& segment, const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix, uint32_t color) {
+void DrawSegment(const Segment& segment, const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix, uint32_t color) {
 	Vector3 screenStart = expantion4x4_->Transform(expantion4x4_->Transform(segment.origin, viewProjectionMatrix), viewportMatrix);
 	Vector3 screenEnd = expantion4x4_->Transform(expantion4x4_->Transform(expantionVector3_->Add(segment.origin, segment.diff), viewProjectionMatrix), viewportMatrix);
 
 	Novice::DrawLine(int(screenStart.x), int(screenStart.y), int(screenEnd.x), int(screenEnd.y), color);
 }
 
+Vector3 Lerp(const Vector3& v1, const Vector3& v2, float t) {
+	return v1 + (v2 - v1) * t;
+}
 
-void DrawAABB(const AABB& aabb, const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix, uint32_t color) {
-	// AABBの8つの頂点を計算
-	Vector3 v0 = aabb.min;
-	Vector3 v1 = { aabb.max.x, aabb.min.y, aabb.min.z };
-	Vector3 v2 = { aabb.min.x, aabb.max.y, aabb.min.z };
-	Vector3 v3 = { aabb.max.x, aabb.max.y, aabb.min.z };
-	Vector3 v4 = { aabb.min.x, aabb.min.y, aabb.max.z };
-	Vector3 v5 = { aabb.max.x, aabb.min.y, aabb.max.z };
-	Vector3 v6 = { aabb.min.x, aabb.max.y, aabb.max.z };
-	Vector3 v7 = aabb.max;
+void DrawBezier(const Vector3& controlPoint0, Vector3 const& controlPoint1, Vector3& controlPoint2,
+	const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix, uint32_t color) {
+	const int segments = 20;  // 曲線の分割数
+	std::vector<Vector3> points;  // 曲線上の点を保存するためのベクトル
 
-	// エッジを定義
-	std::array<Segment, 12> edges = {
-		Segment{v0, v1 - v0}, Segment{v1, v3 - v1}, Segment{v3, v2 - v3}, Segment{v2, v0 - v2},
-		Segment{v4, v5 - v4}, Segment{v5, v7 - v5}, Segment{v7, v6 - v7}, Segment{v6, v4 - v6},
-		Segment{v0, v4 - v0}, Segment{v1, v5 - v1}, Segment{v2, v6 - v2}, Segment{v3, v7 - v3}
-	};
+	for (int i = 0; i <= segments; ++i) {
+		float t = static_cast<float>(i) / segments;
+		// 制御点p0,p1を線形補間
+		Vector3 p0p1 = Lerp(controlPoint0, controlPoint1, t);
+		// 制御点p1,p2を線形補間
+		Vector3 p1p2 = Lerp(controlPoint1, controlPoint2, t);
+		// 制御点p0p1,p1p2をさらに線形補間して曲線上の点を計算
+		Vector3 p = Lerp(p0p1, p1p2, t);
+		points.push_back(p);
+	}
 
-	// 各エッジを描画
-	for (const auto& edge : edges) {
-		DrawLine(edge, viewProjectionMatrix, viewportMatrix, color);
+	// 曲線を描画
+	for (size_t i = 0; i < points.size() - 1; ++i) {
+		Vector3 start = points[i];
+		Vector3 end = points[i + 1];
+		Segment segment{ start, end - start };
+		DrawSegment(segment, viewProjectionMatrix, viewportMatrix, color);
 	}
 }
-
-bool IsCollision(const AABB& aabb, const Segment& segment) {
-	// x軸方向の衝突判定
-	float txmin = (aabb.min.x - segment.origin.x) / segment.diff.x;
-	float txmax = (aabb.max.x - segment.origin.x) / segment.diff.x;
-	if (txmin > txmax) std::swap(txmin, txmax);
-
-	// y軸方向の衝突判定
-	float tymin = (aabb.min.y - segment.origin.y) / segment.diff.y;
-	float tymax = (aabb.max.y - segment.origin.y) / segment.diff.y;
-	if (tymin > tymax) std::swap(tymin, tymax);
-
-	// z軸方向の衝突判定
-	float tzmin = (aabb.min.z - segment.origin.z) / segment.diff.z;
-	float tzmax = (aabb.max.z - segment.origin.z) / segment.diff.z;
-	if (tzmin > tzmax) std::swap(tzmin, tzmax);
-
-	// 最も近い交差点と最も遠い交差点
-	float tNear = std::max({ txmin, tymin, tzmin });
-	float tFar = std::min({ txmax, tymax, tzmax });
-
-	// 衝突判定
-	if (tNear > tFar) return false; // tNearがtFarより大きい場合、交差点がない
-	if (tFar < 0) return false; // tFarが0より小さい場合、線分がAABBの外側にある
-
-	return true; // 交差している
-}
-
-
 
 // Windowsアプリでのエントリーポイント(main関数)
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
@@ -298,17 +231,15 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	Vector3 cameraTranslate{ 0.0f,1.9f,-6.49f };
 	Vector3 cameraRotate{ 0.26f,0.0f,0.0f };
 
-	AABB aabb{
-		.min{-0.5f,-0.5f,-0.5f},
-		.max{0.5f,0.5f,0.5f},
-	};
-	Segment segment{
-		.origin{-0.7f,0.3f,0.0f},
-		.diff{2.0f,-0.5f,0.0f}
+	Vector3 controlPoints[3] = {
+		{-0.8f,0.58f,1.0f},
+		{1.76f,1.0f,-0.3f},
+		{0.94f,-0.7f,2.3f},
 	};
 
-	uint32_t color1 = WHITE;
-	uint32_t color2 = WHITE;
+
+
+	uint32_t color = BLUE;
 
 	// ウィンドウの×ボタンが押されるまでループ
 	while (Novice::ProcessMessage() == 0) {
@@ -330,18 +261,16 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		Matrix4x4 worldViewProjectionMatrix = expantion4x4_->Multiply(worldMatrix, expantion4x4_->Multiply(viewMatrix, projectionMatrix));
 		Matrix4x4 viewPortMatrix = expantion4x4_->MakeViewportMatrix(0, 0, float(kWindowWidth), float(kWindowHeight), 0.0f, 1.0f);
 
-		if (IsCollision(aabb, segment)) {
-			color1=RED;
-		}
-		else {
-			color1=WHITE;
+		Sphere sphere[3];
+		for (int i = 0; i < 3; i++) {
+			sphere[i].center = controlPoints[i];
+			sphere[i].radius = 0.01f;
 		}
 
 		ImGui::Begin("Window");
-		ImGui::DragFloat3("aabb.min", &aabb.min.x, 0.01f);
-		ImGui::DragFloat3("aabb.max", &aabb.max.x, 0.01f);
-		ImGui::DragFloat3("segment.origin", &segment.origin.x, 0.01f);
-		ImGui::DragFloat3("segment.diff", &segment.diff.x, 0.01f);
+		ImGui::DragFloat3("ControlPoints[0]", &controlPoints[0].x, 0.01f);
+		ImGui::DragFloat3("ControlPoints[1]", &controlPoints[1].x, 0.01f);
+		ImGui::DragFloat3("ControlPoints[2]", &controlPoints[2].x, 0.01f);
 		ImGui::End();
 
 
@@ -356,9 +285,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		
 		DrawGrid(worldViewProjectionMatrix, viewPortMatrix);
 
-		DrawAABB(aabb, worldViewProjectionMatrix, viewPortMatrix, color1);
+		DrawBezier(controlPoints[0], controlPoints[1], controlPoints[2], worldViewProjectionMatrix, viewMatrix,color);
 
-		DrawLine(segment, worldViewProjectionMatrix, viewPortMatrix, color2);
+		for (int i = 0; i < 3; i++) {
+			DrawSphere(sphere[i], worldViewProjectionMatrix, viewPortMatrix, BLACK);
+		}
 
 		///
 		/// ↑描画処理ここまで
