@@ -22,10 +22,6 @@ struct Sphere {
 	Vector3 center;
 	float radius;
 };
-struct Plane {
-	Vector3 normal;
-	float distance;
-};
 
 struct Line {
 	Vector3 origin;
@@ -42,14 +38,6 @@ struct Segment {
 	Vector3 diff;
 };
 
-struct Triangle {
-	Vector3 vertices[3];
-};
-
-struct AABB {
-	Vector3 min; //!< 最小点
-	Vector3 max; //!< 最大点
-};
 
 void DrawGrid(const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix) {
 	const float kGridHalfWidth = 2.0f;
@@ -140,90 +128,6 @@ void DrawSphere(const Sphere& sphere, const Matrix4x4& viewProjectionMatrix, con
 	}
 }
 
-Vector3 Project(const Vector3& v1, const Vector3& v2) {
-	// v1とv2の内積を計算
-	float dotProduct = expantionVector3_->Dot(v1, v2);
-	// v2とv2の内積を計算
-	float v2lengthSquared = expantionVector3_->Dot(v2, v2);
-	// 比率を計算
-	float scalar = dotProduct / v2lengthSquared;
-	// 比率をv2に掛ける
-	return expantionVector3_->Multiply(scalar, v2);
-}
-Vector3 ClosestPoint(const Vector3& point, const Segment& segment) {
-	// 線分をパラメーター化
-	// t = [(point - origin)・diff] / |diff|^2
-	float t = ((point.x - segment.origin.x) * segment.diff.x +
-		(point.y - segment.origin.y) * segment.diff.y +
-		(point.z - segment.origin.z) * segment.diff.z) /
-		(segment.diff.x * segment.diff.x +
-			segment.diff.y * segment.diff.y +
-			segment.diff.z * segment.diff.z);
-
-	// パラメーター t が [0, 1] の範囲外にある場合、線分の端点が最近接点
-	if (t < 0.0f) {
-		return segment.origin;  // 線分の始点が最近接点
-	}
-	else if (t > 1.0f) {
-		return Vector3{ segment.origin.x + segment.diff.x,
-					   segment.origin.y + segment.diff.y,
-					   segment.origin.z + segment.diff.z };  // 線分の終点が最近接点
-	}
-
-	// 線分上の点を計算
-	float closestX = segment.origin.x + t * segment.diff.x;
-	float closestY = segment.origin.y + t * segment.diff.y;
-	float closestZ = segment.origin.z + t * segment.diff.z;
-
-	// 最近接点のベクトルを返す
-	return Vector3{ closestX, closestY, closestZ };
-}
-
-Vector3 Cross(const Vector3& v1, const Vector3& v2) {
-	Vector3 result;
-	result.x = v1.y * v2.z - v1.z * v2.y;
-	result.y = v1.z * v2.x - v1.x * v2.z;
-	result.z = v1.x * v2.y - v1.y * v2.x;
-	return result;
-}
-
-Vector3 Prependicular(const Vector3& vector) {
-	if (vector.x != 0.0f || vector.y != 0.0f) {
-		return{ -vector.z,vector.x,0.0f };
-	}
-	return { 0.0f,-vector.z,vector.y };
-}
-
-void DrawPlane(const Plane& plane, const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix, uint32_t color) {
-	Vector3 center = expantionVector3_->Multiply(plane.distance, plane.normal);
-	Vector3 perpendiculars[4];
-	perpendiculars[0] = expantionVector3_->Normalize(Prependicular(plane.normal));
-	perpendiculars[1] = { -perpendiculars[0].x,-perpendiculars[0].y,-perpendiculars[0].z };
-	perpendiculars[2] = Cross(plane.normal, perpendiculars[0]);
-	perpendiculars[3] = { -perpendiculars[2].x,-perpendiculars[2].y,-perpendiculars[2].z };
-
-	Vector3 points[4];
-	for (uint32_t index = 0; index < 4; ++index) {
-		Vector3 extend = expantionVector3_->Multiply(2.0f, perpendiculars[index]);
-		Vector3 point = expantionVector3_->Add(center, extend);
-		points[index] = expantion4x4_->Transform(expantion4x4_->Transform(point, viewProjectionMatrix), viewportMatrix);
-	}
-
-	Novice::DrawLine(int(points[0].x), int(points[0].y), int(points[2].x), int(points[2].y), color);
-	Novice::DrawLine(int(points[1].x), int(points[1].y), int(points[2].x), int(points[2].y), color);
-	Novice::DrawLine(int(points[3].x), int(points[3].y), int(points[1].x), int(points[1].y), color);
-	Novice::DrawLine(int(points[3].x), int(points[3].y), int(points[0].x), int(points[0].y), color);
-}
-
-void DrawTriangle(const Triangle& triangle, const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix, uint32_t color) {
-	Vector3 points[3];
-	for (uint32_t index = 0; index < 3; ++index) {
-		points[index] = expantion4x4_->Transform(expantion4x4_->Transform(triangle.vertices[index], viewProjectionMatrix), viewportMatrix);
-	}
-
-	Novice::DrawTriangle(int(points[0].x), int(points[0].y), int(points[1].x), int(points[1].y), int(points[2].x), int(points[2].y), color, kFillModeWireFrame);
-}
-
 void DrawLine(const Segment& segment, const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix, uint32_t color) {
 	Vector3 screenStart = expantion4x4_->Transform(expantion4x4_->Transform(segment.origin, viewProjectionMatrix), viewportMatrix);
 	Vector3 screenEnd = expantion4x4_->Transform(expantion4x4_->Transform(expantionVector3_->Add(segment.origin, segment.diff), viewProjectionMatrix), viewportMatrix);
@@ -231,59 +135,23 @@ void DrawLine(const Segment& segment, const Matrix4x4& viewProjectionMatrix, con
 	Novice::DrawLine(int(screenStart.x), int(screenStart.y), int(screenEnd.x), int(screenEnd.y), color);
 }
 
-
-void DrawAABB(const AABB& aabb, const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix, uint32_t color) {
-	// AABBの8つの頂点を計算
-	Vector3 v0 = aabb.min;
-	Vector3 v1 = { aabb.max.x, aabb.min.y, aabb.min.z };
-	Vector3 v2 = { aabb.min.x, aabb.max.y, aabb.min.z };
-	Vector3 v3 = { aabb.max.x, aabb.max.y, aabb.min.z };
-	Vector3 v4 = { aabb.min.x, aabb.min.y, aabb.max.z };
-	Vector3 v5 = { aabb.max.x, aabb.min.y, aabb.max.z };
-	Vector3 v6 = { aabb.min.x, aabb.max.y, aabb.max.z };
-	Vector3 v7 = aabb.max;
-
-	// エッジを定義
-	std::array<Segment, 12> edges = {
-		Segment{v0, v1 - v0}, Segment{v1, v3 - v1}, Segment{v3, v2 - v3}, Segment{v2, v0 - v2},
-		Segment{v4, v5 - v4}, Segment{v5, v7 - v5}, Segment{v7, v6 - v7}, Segment{v6, v4 - v6},
-		Segment{v0, v4 - v0}, Segment{v1, v5 - v1}, Segment{v2, v6 - v2}, Segment{v3, v7 - v3}
-	};
-
-	// 各エッジを描画
-	for (const auto& edge : edges) {
-		DrawLine(edge, viewProjectionMatrix, viewportMatrix, color);
+static const int kRowHeight = 20;
+static const int kColumnWidth = 60;
+void MatrixScreenPrint(int x, int y, const Matrix4x4& matrix, const char* label) {
+	Novice::ScreenPrintf(x, y, "%s", label);
+	for (int row = 0; row < 4; ++row) {
+		for (int column = 0; column < 4; ++column) {
+			Novice::ScreenPrintf(x + column * kColumnWidth, y + row * kRowHeight + kRowHeight, "%6.02f", matrix.m[row][column]);
+		}
 	}
 }
 
-bool IsCollision(const AABB& aabb, const Segment& segment) {
-	// x軸方向の衝突判定
-	float txmin = (aabb.min.x - segment.origin.x) / segment.diff.x;
-	float txmax = (aabb.max.x - segment.origin.x) / segment.diff.x;
-	if (txmin > txmax) std::swap(txmin, txmax);
-
-	// y軸方向の衝突判定
-	float tymin = (aabb.min.y - segment.origin.y) / segment.diff.y;
-	float tymax = (aabb.max.y - segment.origin.y) / segment.diff.y;
-	if (tymin > tymax) std::swap(tymin, tymax);
-
-	// z軸方向の衝突判定
-	float tzmin = (aabb.min.z - segment.origin.z) / segment.diff.z;
-	float tzmax = (aabb.max.z - segment.origin.z) / segment.diff.z;
-	if (tzmin > tzmax) std::swap(tzmin, tzmax);
-
-	// 最も近い交差点と最も遠い交差点
-	float tNear = std::max({ txmin, tymin, tzmin });
-	float tFar = std::min({ txmax, tymax, tzmax });
-
-	// 衝突判定
-	if (tNear > tFar) return false; // tNearがtFarより大きい場合、交差点がない
-	if (tFar < 0) return false; // tFarが0より小さい場合、線分がAABBの外側にある
-
-	return true; // 交差している
+void VectorScreenPrint(int x, int y, const Vector3& vector, const char* ladel) {
+	Novice::ScreenPrintf(x, y, "%.02f", vector.x);
+	Novice::ScreenPrintf(x + kColumnWidth, y, "%.02f", vector.y);
+	Novice::ScreenPrintf(x + kColumnWidth * 2, y, "%.02f", vector.z);
+	Novice::ScreenPrintf(x + kColumnWidth * 3, y, "%s", ladel);
 }
-
-
 
 // Windowsアプリでのエントリーポイント(main関数)
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
@@ -298,17 +166,32 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	Vector3 cameraTranslate{ 0.0f,1.9f,-6.49f };
 	Vector3 cameraRotate{ 0.26f,0.0f,0.0f };
 
-	AABB aabb{
-		.min{-0.5f,-0.5f,-0.5f},
-		.max{0.5f,0.5f,0.5f},
+	Vector3 translates[3] = {
+		{0.2f,1.0f,0.0f},
+		{0.4f,0.0f,0.0f},
+		{0.3f,0.0f,0.0f},
 	};
-	Segment segment{
-		.origin{-0.7f,0.3f,0.0f},
-		.diff{2.0f,-0.5f,0.0f}
+	Vector3 rotates[3] = {
+		{0.0f,0.0f,-6.8f},
+		{0.0f,0.0f,-1.4f},
+		{0.0f,0.0f,0.0f},
+	};
+	Vector3 scales[3] = {
+		{1.0f,1.0f,1.0f},
+		{1.0f,1.0f,1.0f},
+		{1.0f,1.0f,1.0f},
+	};
+	Sphere spheres[3] = {
+		{{0.0f, 0.0f, 0.0f}, 1.0f},
+		{{0.0f, 0.0f, 0.0f}, 1.0f},
+		{{0.0f, 0.0f, 0.0f}, 1.0f},
 	};
 
-	uint32_t color1 = WHITE;
-	uint32_t color2 = WHITE;
+	uint32_t color[3] = {
+		RED,
+		GREEN,
+		BLUE,
+	};
 
 	// ウィンドウの×ボタンが押されるまでループ
 	while (Novice::ProcessMessage() == 0) {
@@ -328,20 +211,44 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		Matrix4x4 viewMatrix = expantion4x4_->Inverse(cameraMatrix);
 		Matrix4x4 projectionMatrix = expantion4x4_->MakePrespectiveFovMatrix(0.45f, float(kWindowWidth) / float(kWindowHeight), 0.1f, 100.0f);
 		Matrix4x4 worldViewProjectionMatrix = expantion4x4_->Multiply(worldMatrix, expantion4x4_->Multiply(viewMatrix, projectionMatrix));
-		Matrix4x4 viewPortMatrix = expantion4x4_->MakeViewportMatrix(0, 0, float(kWindowWidth), float(kWindowHeight), 0.0f, 1.0f);
+		Matrix4x4 viewportMatrix = expantion4x4_->MakeViewportMatrix(0, 0, float(kWindowWidth), float(kWindowHeight), 0.0f, 1.0f);
 
-		if (IsCollision(aabb, segment)) {
-			color1=RED;
-		}
-		else {
-			color1=WHITE;
-		}
+		Matrix4x4 shoulderLocalMatrix = expantion4x4_->MakeAffineMatrix(scales[0], rotates[0], translates[0]);
+		Matrix4x4 elbowLocalMatrix = expantion4x4_->MakeAffineMatrix(scales[1], rotates[1], translates[1]);
+		Matrix4x4 handLocalMatrix = expantion4x4_->MakeAffineMatrix(scales[2], rotates[2], translates[2]);
+
+		Matrix4x4 shoulderWorldMatrix = shoulderLocalMatrix;
+		Matrix4x4 elbowWorldMatrix = expantion4x4_->Multiply(elbowLocalMatrix, shoulderLocalMatrix);
+		Matrix4x4 handWorldMatrix = expantion4x4_->Multiply(expantion4x4_->Multiply(handLocalMatrix, elbowLocalMatrix), shoulderLocalMatrix);
+
+		Vector3 shoulderPos = { 0.0f, 0.0f, 0.0f };
+		Vector3 elbowPos = { 0.0f, 0.0f, 0.0f };
+		Vector3 handPos = { 0.0f, 0.0f, 0.0f };
+
+		shoulderPos = expantion4x4_->GetTranslate(shoulderWorldMatrix);
+
+		elbowPos = expantion4x4_->GetTranslate(elbowWorldMatrix);
+
+		handPos = expantion4x4_->GetTranslate(handWorldMatrix);
+
+		Segment shoulderToElbow;
+		shoulderToElbow.origin = shoulderPos;
+		shoulderToElbow.diff = expantionVector3_->Subtract(elbowPos, shoulderPos);
+
+		Segment elbowToHand;
+		elbowToHand.origin = elbowPos;
+		elbowToHand.diff = expantionVector3_->Subtract(handPos, elbowPos);
 
 		ImGui::Begin("Window");
-		ImGui::DragFloat3("aabb.min", &aabb.min.x, 0.01f);
-		ImGui::DragFloat3("aabb.max", &aabb.max.x, 0.01f);
-		ImGui::DragFloat3("segment.origin", &segment.origin.x, 0.01f);
-		ImGui::DragFloat3("segment.diff", &segment.diff.x, 0.01f);
+		ImGui::DragFloat3("translates[0]", &translates[0].x, 0.01f);
+		ImGui::DragFloat3("rotates[0]", &rotates[0].x, 0.01f);
+		ImGui::DragFloat3("scales[0]", &scales[0].x, 0.01f);
+		ImGui::DragFloat3("translates[1]", &translates[1].x, 0.01f);
+		ImGui::DragFloat3("rotates[1]", &rotates[1].x, 0.01f);
+		ImGui::DragFloat3("scales[1]", &scales[1].x, 0.01f);
+		ImGui::DragFloat3("translates[2]", &translates[2].x, 0.01f);
+		ImGui::DragFloat3("rotates[2]", &rotates[2].x, 0.01f);
+		ImGui::DragFloat3("scales[2]", &scales[2].x, 0.01f);
 		ImGui::End();
 
 
@@ -354,11 +261,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		/// ↓描画処理ここから
 		///
 		
-		DrawGrid(worldViewProjectionMatrix, viewPortMatrix);
+		DrawGrid(worldViewProjectionMatrix, viewportMatrix);
 
-		DrawAABB(aabb, worldViewProjectionMatrix, viewPortMatrix, color1);
+		DrawSphere({ shoulderPos, 0.05f }, worldViewProjectionMatrix, viewportMatrix, RED);
+		DrawSphere({ elbowPos, 0.05f }, worldViewProjectionMatrix, viewportMatrix, GREEN);
+		DrawSphere({ handPos, 0.05f }, worldViewProjectionMatrix, viewportMatrix, BLUE);
 
-		DrawLine(segment, worldViewProjectionMatrix, viewPortMatrix, color2);
+		DrawLine(shoulderToElbow, worldViewProjectionMatrix, viewportMatrix, WHITE);
+		DrawLine(elbowToHand, worldViewProjectionMatrix, viewportMatrix, WHITE);
 
 		///
 		/// ↑描画処理ここまで

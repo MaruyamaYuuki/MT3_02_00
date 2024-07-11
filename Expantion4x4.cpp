@@ -178,3 +178,10 @@ Matrix4x4 Expantion4x4::MakeViewportMatrix(float left, float top, float width, f
 	result.m[3][2] = minDepth;
 	return result;
 }
+
+Vector3 Expantion4x4::GetTranslate(const Matrix4x4& m) {
+	Vector3 result = {
+		m.m[3][0],m.m[3][1],m.m[3][2],
+	};
+	return result;
+}
