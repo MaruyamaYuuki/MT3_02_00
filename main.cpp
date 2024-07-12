@@ -163,19 +163,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	Vector3 cameraTranslate{ 0.0f,1.9f,-6.49f };
 	Vector3 cameraRotate{ 0.26f,0.0f,0.0f };
 
-	Spring spring{};
-	spring.anchor = { 0.0f,0.0f,0.0f };
-	spring.naturalLength = 1.0f;
-	spring.stiffnes = 100.0f;
-	spring.dampingCoefficient = 2.0f;
-
 	Ball ball{};
-	ball.position = { 1.2f,0.0f,0.0f };
-	ball.mass = 2.0f;
+	ball.position = { 1.0f,0.0f,0.0f };
 	ball.radius = 0.05f;
-	ball.color = BLUE;
+	ball.color = WHITE;
+
+	Vector3 c = { 0.0f,0.0f,0.0f };
 
 	float deltaTime = 1.0f / 60.0f;
+	float angleVelocity = 2 * 3.14f / 2;
+	float angle = 0.0f;
+	float r = 0.8f;
 
 	bool isSimulationRunning = false;
 
@@ -206,21 +204,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		}
 		ImGui::End();
 
+
+
 		if (isSimulationRunning) {
-    		Vector3 diff = ball.position - spring.anchor;
-    		float length = expantionVector3_->Length(diff);
-    		if (length != 0.0f) {
-    			Vector3 direction = expantionVector3_->Normalize(diff);
-    			Vector3 resrPosition = spring.anchor + direction * spring.naturalLength;
-    			Vector3 displacenet = length * (ball.position - resrPosition);
-    			Vector3 restoringForce = -spring.stiffnes * displacenet;
-    			Vector3 dampingForce = -spring.dampingCoefficient * ball.velocity;
-    			Vector3 force = restoringForce + dampingForce;
-    			ball.acceleration = force / ball.mass;
-    		}
-    		ball.velocity += ball.acceleration * deltaTime;
-    		ball.position += ball.velocity * deltaTime;
+			angle += angleVelocity * deltaTime;
 		}
+		ball.position.x = c.x + std::cos(angle) * r;
+		ball.position.y = c.y + std::sin(angle) * r;
+		ball.position.z = c.z;
 
 
 		///
@@ -232,9 +223,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		///
 		
 		DrawGrid(worldViewProjectionMatrix, viewportMatrix);
-		DrawLine({ spring.anchor,ball.position }, worldViewProjectionMatrix, viewportMatrix, WHITE);
 		DrawSphere({ ball.position,ball.radius }, worldViewProjectionMatrix, viewportMatrix, ball.color);
-
 		///
 		/// ↑描画処理ここまで
 		///
