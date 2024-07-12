@@ -136,31 +136,38 @@ void DrawSegment(const Segment& segment, const Matrix4x4& viewProjectionMatrix, 
 }
 
 Vector3 Lerp(const Vector3& v1, const Vector3& v2, float t) {
-	return v1 + (v2 - v1) * t;
+	return (1.0f - t) * v1 +  t * v2;
 }
 
 void DrawBezier(const Vector3& controlPoint0, const Vector3& controlPoint1, const Vector3& controlPoint2,
 	const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix, uint32_t color) {
-	const int numSegments = 50;  // 曲線を描画する線分の数
-	Vector3 prevPoint = controlPoint0;
+	const int numSegments = 32;  // 曲線を描画する線分の数
 
-	for (int i = 1; i <= numSegments; ++i) {
+	for (int i = 0; i < numSegments; ++i) {
 		float t = static_cast<float>(i) / numSegments;
+		float nextT = (static_cast<float>(i)+1) / numSegments;
 		// 制御点p0,p1を線形補間
 		Vector3 p0p1 = Lerp(controlPoint0, controlPoint1, t);
 		// 制御点p1,p2を線形補間
 		Vector3 p1p2 = Lerp(controlPoint1, controlPoint2, t);
 		// 制御点p0p1,p1p2をさらに線形補間して曲線上の点を計算
 		Vector3 p = Lerp(p0p1, p1p2, t);
+		
+		
+		// 制御点p0,p1を線形補間
+		Vector3 nextp0p1 = Lerp(controlPoint0, controlPoint1, nextT);
+		// 制御点p1,p2を線形補間
+		Vector3 nextp1p2 = Lerp(controlPoint1, controlPoint2, nextT);
+		// 制御点p0p1,p1p2をさらに線形補間して曲線上の点を計算
+		Vector3 nextp = Lerp(nextp0p1, nextp1p2, nextT);
+
 
 		// 画面座標に変換
-		Vector3 screenStart = expantion4x4_->Transform(expantion4x4_->Transform(prevPoint, viewProjectionMatrix), viewportMatrix);
-		Vector3 screenEnd = expantion4x4_->Transform(expantion4x4_->Transform(p, viewProjectionMatrix), viewportMatrix);
+		Vector3 screenStart = expantion4x4_->Transform(expantion4x4_->Transform(p, viewProjectionMatrix), viewportMatrix);
+		Vector3 screenEnd = expantion4x4_->Transform(expantion4x4_->Transform(nextp, viewProjectionMatrix), viewportMatrix);
 
 		// 線を描画
 		Novice::DrawLine(int(screenStart.x), int(screenStart.y), int(screenEnd.x), int(screenEnd.y), color);
-
-		prevPoint = p;
 	}
 }
 
@@ -231,7 +238,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		
 		DrawGrid(worldViewProjectionMatrix, viewPortMatrix);
 
-		DrawBezier(controlPoints[0], controlPoints[1], controlPoints[2], worldViewProjectionMatrix, viewMatrix,color);
+		DrawBezier(controlPoints[0], controlPoints[1], controlPoints[2], worldViewProjectionMatrix, viewPortMatrix,color);
 
 		for (int i = 0; i < 3; i++) {
 			DrawSphere(sphere[i], worldViewProjectionMatrix, viewPortMatrix, BLACK);
