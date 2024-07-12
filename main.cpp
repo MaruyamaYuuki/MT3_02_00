@@ -128,60 +128,6 @@ void DrawSphere(const Sphere& sphere, const Matrix4x4& viewProjectionMatrix, con
 	}
 }
 
-Vector3 Project(const Vector3& v1, const Vector3& v2) {
-	// v1とv2の内積を計算
-	float dotProduct = expantionVector3_->Dot(v1, v2);
-	// v2とv2の内積を計算
-	float v2lengthSquared = expantionVector3_->Dot(v2, v2);
-	// 比率を計算
-	float scalar = dotProduct / v2lengthSquared;
-	// 比率をv2に掛ける
-	return expantionVector3_->Multiply(scalar, v2);
-}
-Vector3 ClosestPoint(const Vector3& point, const Segment& segment) {
-	// 線分をパラメーター化
-	// t = [(point - origin)・diff] / |diff|^2
-	float t = ((point.x - segment.origin.x) * segment.diff.x +
-		(point.y - segment.origin.y) * segment.diff.y +
-		(point.z - segment.origin.z) * segment.diff.z) /
-		(segment.diff.x * segment.diff.x +
-			segment.diff.y * segment.diff.y +
-			segment.diff.z * segment.diff.z);
-
-	// パラメーター t が [0, 1] の範囲外にある場合、線分の端点が最近接点
-	if (t < 0.0f) {
-		return segment.origin;  // 線分の始点が最近接点
-	}
-	else if (t > 1.0f) {
-		return Vector3{ segment.origin.x + segment.diff.x,
-					   segment.origin.y + segment.diff.y,
-					   segment.origin.z + segment.diff.z };  // 線分の終点が最近接点
-	}
-
-	// 線分上の点を計算
-	float closestX = segment.origin.x + t * segment.diff.x;
-	float closestY = segment.origin.y + t * segment.diff.y;
-	float closestZ = segment.origin.z + t * segment.diff.z;
-
-	// 最近接点のベクトルを返す
-	return Vector3{ closestX, closestY, closestZ };
-}
-
-Vector3 Cross(const Vector3& v1, const Vector3& v2) {
-	Vector3 result;
-	result.x = v1.y * v2.z - v1.z * v2.y;
-	result.y = v1.z * v2.x - v1.x * v2.z;
-	result.z = v1.x * v2.y - v1.y * v2.x;
-	return result;
-}
-
-Vector3 Prependicular(const Vector3& vector) {
-	if (vector.x != 0.0f || vector.y != 0.0f) {
-		return{ -vector.z,vector.x,0.0f };
-	}
-	return { 0.0f,-vector.z,vector.y };
-}
-
 void DrawSegment(const Segment& segment, const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix, uint32_t color) {
 	Vector3 screenStart = expantion4x4_->Transform(expantion4x4_->Transform(segment.origin, viewProjectionMatrix), viewportMatrix);
 	Vector3 screenEnd = expantion4x4_->Transform(expantion4x4_->Transform(expantionVector3_->Add(segment.origin, segment.diff), viewProjectionMatrix), viewportMatrix);
@@ -193,30 +139,32 @@ Vector3 Lerp(const Vector3& v1, const Vector3& v2, float t) {
 	return v1 + (v2 - v1) * t;
 }
 
-void DrawBezier(const Vector3& controlPoint0, Vector3 const& controlPoint1, Vector3& controlPoint2,
+void DrawBezier(const Vector3& controlPoint0, const Vector3& controlPoint1, const Vector3& controlPoint2,
 	const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix, uint32_t color) {
-	const int segments = 20;  // 曲線の分割数
-	std::vector<Vector3> points;  // 曲線上の点を保存するためのベクトル
+	const int numSegments = 50;  // 曲線を描画する線分の数
+	Vector3 prevPoint = controlPoint0;
 
-	for (int i = 0; i <= segments; ++i) {
-		float t = static_cast<float>(i) / segments;
+	for (int i = 1; i <= numSegments; ++i) {
+		float t = static_cast<float>(i) / numSegments;
 		// 制御点p0,p1を線形補間
 		Vector3 p0p1 = Lerp(controlPoint0, controlPoint1, t);
 		// 制御点p1,p2を線形補間
 		Vector3 p1p2 = Lerp(controlPoint1, controlPoint2, t);
 		// 制御点p0p1,p1p2をさらに線形補間して曲線上の点を計算
 		Vector3 p = Lerp(p0p1, p1p2, t);
-		points.push_back(p);
-	}
 
-	// 曲線を描画
-	for (size_t i = 0; i < points.size() - 1; ++i) {
-		Vector3 start = points[i];
-		Vector3 end = points[i + 1];
-		Segment segment{ start, end - start };
-		DrawSegment(segment, viewProjectionMatrix, viewportMatrix, color);
+		// 画面座標に変換
+		Vector3 screenStart = expantion4x4_->Transform(expantion4x4_->Transform(prevPoint, viewProjectionMatrix), viewportMatrix);
+		Vector3 screenEnd = expantion4x4_->Transform(expantion4x4_->Transform(p, viewProjectionMatrix), viewportMatrix);
+
+		// 線を描画
+		Novice::DrawLine(int(screenStart.x), int(screenStart.y), int(screenEnd.x), int(screenEnd.y), color);
+
+		prevPoint = p;
 	}
 }
+
+
 
 // Windowsアプリでのエントリーポイント(main関数)
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
@@ -236,8 +184,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		{1.76f,1.0f,-0.3f},
 		{0.94f,-0.7f,2.3f},
 	};
-
-
 
 	uint32_t color = BLUE;
 
