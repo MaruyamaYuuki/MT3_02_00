@@ -52,9 +52,10 @@ struct Ball {
 	float radius;
 	unsigned int color;
 };
-struct Pendulum {
+struct ConicalPendulum {
 	Vector3 anchor;
 	float length;
+	float halfApexAngle;
 	float angle;
 	float angularVelocity;
 	float angularAcceleration;
@@ -171,15 +172,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	Vector3 cameraRotate{ 0.26f,0.0f,0.0f };
 
 	Ball ball{};
+	ball.position = { 0.0f,0.0f,0.0f };
 	ball.radius = 0.05f;
 	ball.color = BLUE;
 
-	Pendulum pendulum;
-	pendulum.anchor = { 0.0f,1.0f,0.0f };
-	pendulum.length = 0.8f;
-	pendulum.angle = 0.7f;
-	pendulum.angularVelocity = 0.0f;
-	pendulum.angularAcceleration = 0.0f;
+	ConicalPendulum conicalPendulum;
+	conicalPendulum.anchor = { 0.0f,1.0f,0.0f };
+	conicalPendulum.length = 0.8f;
+	conicalPendulum.halfApexAngle = 0.7f;
+	conicalPendulum.angle = 0.0f;
+	conicalPendulum.angularVelocity = 0.0f;
+	conicalPendulum.angularAcceleration = 0.0f;
 
 	Vector3 p = { 0.0f,0.0f,0.0f };
 
@@ -217,14 +220,15 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 		if (isSimulation) {
-    		pendulum.angularAcceleration = -(9.8f / pendulum.length) * std::sin(pendulum.angle);
-    		pendulum.angularVelocity += pendulum.angularAcceleration * deltaTime;
-    		pendulum.angle += pendulum.angularVelocity * deltaTime;
+			conicalPendulum.angularVelocity = std::sqrt(9.8f / (conicalPendulum.length * std::cos(conicalPendulum.halfApexAngle)));
+			conicalPendulum.angle += conicalPendulum.angularVelocity * deltaTime;
 		}
 
-		p.x = pendulum.anchor.x + std::sin(pendulum.angle) * pendulum.length;
-		p.y = pendulum.anchor.y - std::cos(pendulum.angle) * pendulum.length;
-		p.z = pendulum.anchor.z;
+		float radius = std::sin(conicalPendulum.halfApexAngle) * conicalPendulum.length;
+		float height = std::cos(conicalPendulum.halfApexAngle) * conicalPendulum.length;
+		ball.position.x = conicalPendulum.anchor.x + std::cos(conicalPendulum.angle) * radius;
+		ball.position.y = conicalPendulum.anchor.y - height;
+		ball.position.z = conicalPendulum.anchor.z - std::sin(conicalPendulum.angle) * radius;
 
 		///
 		/// ↑更新処理ここまで
@@ -235,8 +239,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		///
 		
 		DrawGrid(worldViewProjectionMatrix, viewportMatrix);
-		DrawLine({ pendulum.anchor,p }, worldViewProjectionMatrix, viewportMatrix, WHITE);
-		DrawSphere({ p,ball.radius }, worldViewProjectionMatrix, viewportMatrix, ball.color);
+		DrawLine({ conicalPendulum.anchor,ball.position }, worldViewProjectionMatrix, viewportMatrix, WHITE);
+		DrawSphere({ ball.position,ball.radius }, worldViewProjectionMatrix, viewportMatrix, ball.color);
 		///
 		/// ↑描画処理ここまで
 		///
