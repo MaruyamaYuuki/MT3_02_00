@@ -145,7 +145,7 @@ void DrawSphere(const Sphere& sphere, const Matrix4x4& viewProjectionMatrix, con
 
 void DrawLine(const Segment& segment, const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix, uint32_t color) {
 	Vector3 screenStart = expantion4x4_->Transform(expantion4x4_->Transform(segment.origin, viewProjectionMatrix), viewportMatrix);
-	Vector3 screenEnd = expantion4x4_->Transform(expantion4x4_->Transform(expantionVector3_->Add(segment.origin, segment.diff), viewProjectionMatrix), viewportMatrix);
+	Vector3 screenEnd = expantion4x4_->Transform(expantion4x4_->Transform(segment.diff, viewProjectionMatrix), viewportMatrix);
 
 	Novice::DrawLine(int(screenStart.x), int(screenStart.y), int(screenEnd.x), int(screenEnd.y), color);
 }
@@ -164,17 +164,18 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	Vector3 cameraRotate{ 0.26f,0.0f,0.0f };
 
 	Spring spring{};
-	spring.anchor = { 0.0f,0.0f,0.0f };
-	spring.naturalLength = 1.0f;
+	spring.anchor = { 0.0f,1.0f,0.0f };
+	spring.naturalLength =0.7f;
 	spring.stiffnes = 100.0f;
 	spring.dampingCoefficient = 2.0f;
 
 	Ball ball{};
-	ball.position = { 1.2f,0.0f,0.0f };
+	ball.position = { 0.8f,0.2f,0.0f };
 	ball.mass = 2.0f;
 	ball.radius = 0.05f;
 	ball.color = BLUE;
 
+	const Vector3 kGravity{ 0.0f,-9.8f,0.0f };
 	float deltaTime = 1.0f / 60.0f;
 
 	bool isSimulationRunning = false;
@@ -215,7 +216,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     			Vector3 displacenet = length * (ball.position - resrPosition);
     			Vector3 restoringForce = -spring.stiffnes * displacenet;
     			Vector3 dampingForce = -spring.dampingCoefficient * ball.velocity;
-    			Vector3 force = restoringForce + dampingForce;
+				// 重力の影響を加える
+				Vector3 gravityForce = ball.mass * kGravity;
+				Vector3 force = restoringForce + dampingForce + gravityForce;
     			ball.acceleration = force / ball.mass;
     		}
     		ball.velocity += ball.acceleration * deltaTime;
