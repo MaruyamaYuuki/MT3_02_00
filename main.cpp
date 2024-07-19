@@ -52,6 +52,13 @@ struct Ball {
 	float radius;
 	unsigned int color;
 };
+struct Pendulum {
+	Vector3 anchor;
+	float length;
+	float angle;
+	float angularVelocity;
+	float angularAcceleration;
+};
 
 
 void DrawGrid(const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix) {
@@ -145,7 +152,7 @@ void DrawSphere(const Sphere& sphere, const Matrix4x4& viewProjectionMatrix, con
 
 void DrawLine(const Segment& segment, const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix, uint32_t color) {
 	Vector3 screenStart = expantion4x4_->Transform(expantion4x4_->Transform(segment.origin, viewProjectionMatrix), viewportMatrix);
-	Vector3 screenEnd = expantion4x4_->Transform(expantion4x4_->Transform(expantionVector3_->Add(segment.origin, segment.diff), viewProjectionMatrix), viewportMatrix);
+	Vector3 screenEnd = expantion4x4_->Transform(expantion4x4_->Transform(segment.diff, viewProjectionMatrix), viewportMatrix);
 
 	Novice::DrawLine(int(screenStart.x), int(screenStart.y), int(screenEnd.x), int(screenEnd.y), color);
 }
@@ -164,18 +171,21 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	Vector3 cameraRotate{ 0.26f,0.0f,0.0f };
 
 	Ball ball{};
-	ball.position = { 1.0f,0.0f,0.0f };
 	ball.radius = 0.05f;
-	ball.color = WHITE;
+	ball.color = BLUE;
 
-	Vector3 c = { 0.0f,0.0f,0.0f };
+	Pendulum pendulum;
+	pendulum.anchor = { 0.0f,1.0f,0.0f };
+	pendulum.length = 0.8f;
+	pendulum.angle = 0.7f;
+	pendulum.angularVelocity = 0.0f;
+	pendulum.angularAcceleration = 0.0f;
+
+	Vector3 p = { 0.0f,0.0f,0.0f };
 
 	float deltaTime = 1.0f / 60.0f;
-	float angleVelocity = 2 * 3.14f / 2;
-	float angle = 0.0f;
-	float r = 0.8f;
 
-	bool isSimulationRunning = false;
+	bool isSimulation = false;
 
 	// ウィンドウの×ボタンが押されるまでループ
 	while (Novice::ProcessMessage() == 0) {
@@ -199,20 +209,22 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 		ImGui::Begin("Window");
-		if (ImGui::Button(isSimulationRunning ? "Stop" : "Start")) {
-			isSimulationRunning = !isSimulationRunning; // フラグを切り替え
+		if (ImGui::Button(isSimulation ? "Stop" : "Start")) {
+			isSimulation = !isSimulation; // フラグを切り替え
 		}
 		ImGui::End();
 
 
 
-		if (isSimulationRunning) {
-			angle += angleVelocity * deltaTime;
+		if (isSimulation) {
+    		pendulum.angularAcceleration = -(9.8f / pendulum.length) * std::sin(pendulum.angle);
+    		pendulum.angularVelocity += pendulum.angularAcceleration * deltaTime;
+    		pendulum.angle += pendulum.angularVelocity * deltaTime;
 		}
-		ball.position.x = c.x + std::cos(angle) * r;
-		ball.position.y = c.y + std::sin(angle) * r;
-		ball.position.z = c.z;
 
+		p.x = pendulum.anchor.x + std::sin(pendulum.angle) * pendulum.length;
+		p.y = pendulum.anchor.y - std::cos(pendulum.angle) * pendulum.length;
+		p.z = pendulum.anchor.z;
 
 		///
 		/// ↑更新処理ここまで
@@ -223,7 +235,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		///
 		
 		DrawGrid(worldViewProjectionMatrix, viewportMatrix);
-		DrawSphere({ ball.position,ball.radius }, worldViewProjectionMatrix, viewportMatrix, ball.color);
+		DrawLine({ pendulum.anchor,p }, worldViewProjectionMatrix, viewportMatrix, WHITE);
+		DrawSphere({ p,ball.radius }, worldViewProjectionMatrix, viewportMatrix, ball.color);
 		///
 		/// ↑描画処理ここまで
 		///
