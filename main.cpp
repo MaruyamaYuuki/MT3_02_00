@@ -60,7 +60,10 @@ struct ConicalPendulum {
 	float angularVelocity;
 	float angularAcceleration;
 };
-
+struct Plane {
+	Vector3 normal;
+	float distance;
+};
 
 void DrawGrid(const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix) {
 	const float kGridHalfWidth = 2.0f;
