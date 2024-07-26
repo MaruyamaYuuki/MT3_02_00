@@ -37,7 +37,6 @@ struct Segment {
 	Vector3 origin;
 	Vector3 diff;
 };
-
 struct Spring {
 	Vector3 anchor;
 	float naturalLength;
@@ -63,6 +62,10 @@ struct ConicalPendulum {
 struct Plane {
 	Vector3 normal;
 	float distance;
+};
+struct Capsule {
+	Segment segment;
+	float radius;
 };
 
 Vector3 Cross(const Vector3& v1, const Vector3& v2) {
@@ -101,15 +104,25 @@ Vector3 RefLect(const Vector3& input, const Vector3& normal) {
 	return reflection;
 }
 
-bool IsCollision(const Sphere& sphere, const Plane& plane) {
+bool IsCollision(const Capsule& capsule, const Plane& plane) {
 	// 平面の法線を正規化
-	Vector3 normalizedNormal = expantionVector3_->Normalize(plane.normal);
+	float normLength = std::sqrt(plane.normal.x * plane.normal.x + plane.normal.y * plane.normal.y + plane.normal.z * plane.normal.z);
+	Vector3 normalizedNormal = { plane.normal.x / normLength, plane.normal.y / normLength, plane.normal.z / normLength };
 
-	// 球の中心から平面までの距離を計算
-	float distance = std::fabs(expantionVector3_->Dot(normalizedNormal, sphere.center) - plane.distance);
+	// カプセルの線分の2端点
+	Vector3 p1 = capsule.segment.origin;
+	Vector3 p2 = capsule.segment.origin + capsule.segment.diff;
 
-	// 球の中心から平面までの距離が球の半径以下かどうかを判定
-	return distance <= sphere.radius;
+	// 平面と線分の最近接点を求める
+	float d1 = normalizedNormal.x * p1.x + normalizedNormal.y * p1.y + normalizedNormal.z * p1.z - plane.distance;
+	float d2 = normalizedNormal.x * p2.x + normalizedNormal.y * p2.y + normalizedNormal.z * p2.z - plane.distance;
+
+	// もし両端点が平面の同じ側にあるならば、衝突していない
+	if ((d1 > capsule.radius && d2 > capsule.radius) || (d1 < -capsule.radius && d2 < -capsule.radius)) {
+		return false;
+	}
+
+	return true;
 }
 
 
@@ -244,7 +257,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	Vector3 cameraRotate{ 0.26f,0.0f,0.0f };
 
 	Plane plane;
-	plane.normal = expantionVector3_->Normalize({ -0.2f,0.9f,-0.3f }); 
+	plane.normal = expantionVector3_->Normalize({ -0.2f,1.2f,-0.3f }); 
 	plane.distance = 0.0f;
 
 	Ball ball{};
@@ -291,15 +304,23 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 		if (isSimulation) {
 			ball.velocity += ball.acceleration * deltaTime;
-			ball.position += ball.velocity * deltaTime;
 		}
-		if (IsCollision(Sphere{ball.position,ball.radius}, plane)) {
+		Vector3 nextPosition = ball.position + ball.velocity * deltaTime;
+
+		Capsule capsule;
+		capsule.segment.origin = ball.position;
+		capsule.segment.diff = nextPosition - ball.position;
+		capsule.radius = ball.radius;
+
+		if (IsCollision(capsule, plane)) {
 			Vector3 reflected = RefLect(ball.velocity, plane.normal);
 			Vector3 projectToNormal = Project(reflected, plane.normal);
 			Vector3 movingDirection = reflected - projectToNormal;
 			ball.velocity = projectToNormal * e + movingDirection;
 		}
-		Vector3 reflected = RefLect(ball.velocity, plane.normal);
+		else {
+			ball.position = nextPosition;
+		}
 
 
 		///
