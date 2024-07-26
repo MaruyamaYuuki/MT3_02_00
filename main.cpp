@@ -75,7 +75,7 @@ Vector3 Cross(const Vector3& v1, const Vector3& v2) {
 
 Vector3 Prependicular(const Vector3& vector) {
 	if (vector.x != 0.0f || vector.y != 0.0f) {
-		return{ -vector.z,vector.x,0.0f };
+		return{ -vector.y,vector.x,0.0f };
 	}
 	return { 0.0f,-vector.z,vector.y };
 }
@@ -96,18 +96,17 @@ Vector3 RefLect(const Vector3& input, const Vector3& normal) {
 	float dotProduct = expantionVector3_->Dot(input, normal);
 
 	// 反射ベクトルを計算
-	Vector3 reflection = input - normal * (2.0f * dotProduct);
+	Vector3 reflection = input - (2.0f * dotProduct) * normal;
 
 	return reflection;
 }
 
 bool IsCollision(const Sphere& sphere, const Plane& plane) {
 	// 平面の法線を正規化
-	float normLength = std::sqrt(plane.normal.x * plane.normal.x + plane.normal.y * plane.normal.y + plane.normal.z * plane.normal.z);
-	Vector3 normalizedNormal = { plane.normal.x / normLength, plane.normal.y / normLength, plane.normal.z / normLength };
+	Vector3 normalizedNormal = expantionVector3_->Normalize(plane.normal);
 
 	// 球の中心から平面までの距離を計算
-	float distance = std::fabs(normalizedNormal.x * sphere.center.x + normalizedNormal.y * sphere.center.y + normalizedNormal.z * sphere.center.z - plane.distance);
+	float distance = std::fabs(expantionVector3_->Dot(normalizedNormal, sphere.center) - plane.distance);
 
 	// 球の中心から平面までの距離が球の半径以下かどうかを判定
 	return distance <= sphere.radius;
@@ -255,8 +254,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	ball.acceleration = { 0.0f,-9.8f,0.0f };
 	ball.color = WHITE;
 
-	Vector3 p = { 0.0f,0.0f,0.0f };
-
 	float deltaTime = 1.0f / 60.0f;
 
 	bool isSimulation = false;
@@ -300,8 +297,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			Vector3 reflected = RefLect(ball.velocity, plane.normal);
 			Vector3 projectToNormal = Project(reflected, plane.normal);
 			Vector3 movingDirection = reflected - projectToNormal;
-			ball.velocity = projectToNormal * e * movingDirection;
+			ball.velocity = projectToNormal * e + movingDirection;
 		}
+		Vector3 reflected = RefLect(ball.velocity, plane.normal);
 
 
 		///
@@ -315,7 +313,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		DrawGrid(worldViewProjectionMatrix, viewportMatrix);
 		DrawPlane(plane, worldViewProjectionMatrix, viewportMatrix, WHITE);
 		DrawSphere(Sphere{ ball.position,ball.radius }, worldViewProjectionMatrix, viewportMatrix, ball.color);
-
 		///
 		/// ↑描画処理ここまで
 		///
