@@ -80,6 +80,40 @@ Vector3 Prependicular(const Vector3& vector) {
 	return { 0.0f,-vector.z,vector.y };
 }
 
+Vector3 Project(const Vector3& v1, const Vector3& v2) {
+	// v1とv2の内積を計算
+	float dotProduct = expantionVector3_->Dot(v1, v2);
+	// v2とv2の内積を計算
+	float v2lengthSquared = expantionVector3_->Dot(v2, v2);
+	// 比率を計算
+	float scalar = dotProduct / v2lengthSquared;
+	// 比率をv2に掛ける
+	return expantionVector3_->Multiply(scalar, v2);
+}
+
+Vector3 RefLect(const Vector3& input, const Vector3& normal) {
+	// 内積を計算
+	float dotProduct = expantionVector3_->Dot(input, normal);
+
+	// 反射ベクトルを計算
+	Vector3 reflection = input - normal * (2.0f * dotProduct);
+
+	return reflection;
+}
+
+bool IsCollision(const Sphere& sphere, const Plane& plane) {
+	// 平面の法線を正規化
+	float normLength = std::sqrt(plane.normal.x * plane.normal.x + plane.normal.y * plane.normal.y + plane.normal.z * plane.normal.z);
+	Vector3 normalizedNormal = { plane.normal.x / normLength, plane.normal.y / normLength, plane.normal.z / normLength };
+
+	// 球の中心から平面までの距離を計算
+	float distance = std::fabs(normalizedNormal.x * sphere.center.x + normalizedNormal.y * sphere.center.y + normalizedNormal.z * sphere.center.z - plane.distance);
+
+	// 球の中心から平面までの距離が球の半径以下かどうかを判定
+	return distance <= sphere.radius;
+}
+
+
 void DrawGrid(const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix) {
 	const float kGridHalfWidth = 2.0f;
 	const uint32_t kSubdivision = 10;
@@ -210,24 +244,24 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	Vector3 cameraTranslate{ 0.0f,1.9f,-6.49f };
 	Vector3 cameraRotate{ 0.26f,0.0f,0.0f };
 
-	Ball ball{};
-	ball.position = { 0.0f,0.0f,0.0f };
-	ball.radius = 0.05f;
-	ball.color = BLUE;
+	Plane plane;
+	plane.normal = expantionVector3_->Normalize({ -0.2f,0.9f,-0.3f }); 
+	plane.distance = 0.0f;
 
-	ConicalPendulum conicalPendulum;
-	conicalPendulum.anchor = { 0.0f,1.0f,0.0f };
-	conicalPendulum.length = 0.8f;
-	conicalPendulum.halfApexAngle = 0.7f;
-	conicalPendulum.angle = 0.0f;
-	conicalPendulum.angularVelocity = 0.0f;
-	conicalPendulum.angularAcceleration = 0.0f;
+	Ball ball{};
+	ball.position = { 0.8f,1.2f,0.3f };
+	ball.mass = 2.0f;
+	ball.radius = 0.05f;
+	ball.acceleration = { 0.0f,-9.8f,0.0f };
+	ball.color = WHITE;
 
 	Vector3 p = { 0.0f,0.0f,0.0f };
 
 	float deltaTime = 1.0f / 60.0f;
 
 	bool isSimulation = false;
+
+	float e = 0.8f;
 
 	// ウィンドウの×ボタンが押されるまでループ
 	while (Novice::ProcessMessage() == 0) {
@@ -259,15 +293,16 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 		if (isSimulation) {
-			conicalPendulum.angularVelocity = std::sqrt(9.8f / (conicalPendulum.length * std::cos(conicalPendulum.halfApexAngle)));
-			conicalPendulum.angle += conicalPendulum.angularVelocity * deltaTime;
+			ball.velocity += ball.acceleration * deltaTime;
+			ball.position += ball.velocity * deltaTime;
+		}
+		if (IsCollision(Sphere{ball.position,ball.radius}, plane)) {
+			Vector3 reflected = RefLect(ball.velocity, plane.normal);
+			Vector3 projectToNormal = Project(reflected, plane.normal);
+			Vector3 movingDirection = reflected - projectToNormal;
+			ball.velocity = projectToNormal * e * movingDirection;
 		}
 
-		float radius = std::sin(conicalPendulum.halfApexAngle) * conicalPendulum.length;
-		float height = std::cos(conicalPendulum.halfApexAngle) * conicalPendulum.length;
-		ball.position.x = conicalPendulum.anchor.x + std::cos(conicalPendulum.angle) * radius;
-		ball.position.y = conicalPendulum.anchor.y - height;
-		ball.position.z = conicalPendulum.anchor.z - std::sin(conicalPendulum.angle) * radius;
 
 		///
 		/// ↑更新処理ここまで
@@ -278,8 +313,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		///
 		
 		DrawGrid(worldViewProjectionMatrix, viewportMatrix);
-		DrawLine({ conicalPendulum.anchor,ball.position }, worldViewProjectionMatrix, viewportMatrix, WHITE);
-		DrawSphere({ ball.position,ball.radius }, worldViewProjectionMatrix, viewportMatrix, ball.color);
+		DrawPlane(plane, worldViewProjectionMatrix, viewportMatrix, WHITE);
+		DrawSphere(Sphere{ ball.position,ball.radius }, worldViewProjectionMatrix, viewportMatrix, ball.color);
+
 		///
 		/// ↑描画処理ここまで
 		///
